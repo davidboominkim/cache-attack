@@ -44,7 +44,13 @@ __attribute__ ((aligned (64))) uint64_t spy_array[4096];
  *
  * Extract the tag bits of the eviction set address by simply right shifting the value of the base by the number of non-tag bits, aka the number of 
  * index and offset bits, since that means that all that will be left over is the tag bits. These tag bits will be a part of 
- * the returned eviction set address. Extract the index bits of the base address 
+ * the returned eviction set address. Extract the index bits of the base address by first shifting right by the amount of offset bits. This will
+ * get rid of the offset bits and make the index bits the least significant bits. Then, use this shifted value to perform an AND operation with the value
+ * 0x3f (which is 0011 1111) in order to get rid of the tag bits and leave only the index bits. 
+ * Now, we start constructing the eviction set address. The tag bits stay the same because _____ and are shifted left by the number of index bits in order to append
+ * the index bits to the eviction set address. If the index bits' value is greater than the set ID, then the index bits will be equal to the number of sets
+ * plus the set ID, because ____. In all other cases, the index bits will just be the set ID. Then, we shift left by the number of offset bits in order to append
+ * the offset to the eviction set address. The value of this offset is always going to be the number of sets times the size of the line times the way ID. 
  *
  */
 uint64_t* get_eviction_set_address(uint64_t *base, int set, int way)
@@ -76,9 +82,13 @@ void setup(uint64_t *base, int assoc)
 
     // Prime the cache set by set (i.e., prime all lines in a set)
     for (i = 0; i < L1_NUM_SETS; i++) {
+        // eviction_set_addr starts off pointing at some place in memory (base place/address)
         eviction_set_addr = get_eviction_set_address(base, i, 0);
         for (j = 1; j < assoc; j++) {
+            // the VALUE at this address is set as the next address in memory.
             *eviction_set_addr = (uint64_t)get_eviction_set_address(base, i, j);
+            // then, eviction_set_addr starts pointing to the value at the address it's pointing at (which is the next spot in memory)
+            // that's how this is a linked list. 
             eviction_set_addr = (uint64_t *)*eviction_set_addr;
         }
         *eviction_set_addr = 0;
@@ -104,13 +114,16 @@ void trojan(char byte)
 {
     int set;
     uint64_t *eviction_set_addr;
-
+    
+    // turn the char into an uppercase char, since we don't care about case sensitivity and want to maximize bandwidth. 
     if (byte >= 'a' && byte <= 'z') {
         byte -= 32;
     }
+    // 10 --> new line, 13 --> carriage return (?)
     if (byte == 10 || byte == 13) { // encode a new line
         set = 63;
     } else if (byte >= 32 && byte < 96) {
+        // what happens if byte == 95? wouldn't set == 63 then, and it would be a newline? also why do we not include byte == 96?
         set = (byte - 32);
     } else {
         printf("pp trojan: unrecognized character %c\n", byte);
@@ -121,6 +134,14 @@ void trojan(char byte)
      * Your attack code goes in here.
      *
      */  
+    eviction_set_addr = get_eviction_set_address(trojan_array, set, 0);
+    while (*eviction_set_addr != 0){
+        
+        // cause a cache miss????
+        
+        eviction_set_addr = *eviction_set_addr;
+    }
+    
 
 }
 
@@ -145,13 +166,21 @@ char spy()
 {
     int i, max_set;
     uint64_t *eviction_set_addr;
-
+    int longest = 0;
     // Probe the cache line by line and take measurements
     for (i = 0; i < L1_NUM_SETS; i++) {
         /* TODO:
          * Your attack code goes in here.
-         *
-         */  
+         */
+        // use RDTSC() somewhere?
+        eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
+        int time = RDTSC();
+        if (time > longest){
+            max_set = i;  
+            longest = time;
+        }
+        
+        
     }
     eviction_counts[max_set]++;
 }
@@ -175,6 +204,7 @@ int main()
         if (msg == EOF) {
             break;
         }
+        // do we do this for SAMPLES iterations because we want to make sure we dont consider conflict misses due to other reasons not related to the attack?
         for (k = 0; k < SAMPLES; k++) {
           trojan(msg);
           spy();
