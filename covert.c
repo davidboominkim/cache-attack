@@ -22,7 +22,7 @@
 // Intrinsic CLFLUSH for FLUSH+RELOAD attack
 #define CLFLUSH(address) _mm_clflush(address);
 
-#define SAMPLES 1000 // TODO: CONFIGURE THIS, make it as small as possible without changing the results 
+#define SAMPLES 1000 // make this value as small as possible without changing the results 
 
 #define L1_CACHE_SIZE (32*1024)
 #define LINE_SIZE 64
@@ -37,12 +37,10 @@ __attribute__ ((aligned (64))) uint64_t trojan_array[32*4096];
 __attribute__ ((aligned (64))) uint64_t spy_array[4096];
 
 
-/* TODO:
+/*
  * This function provides an eviction set address, given the
  * base address of a trojan/spy array, the required cache
  * set ID, and way ID.
- *
- * Describe the algorithm used here.
  *
  * Extract the tag bits of the eviction set address by simply right shifting the value of the base by the number of non-tag bits, aka the number of 
  * index and offset bits, since that means that all that will be left over is the tag bits. These tag bits will be a part of 
@@ -76,7 +74,7 @@ uint64_t* get_eviction_set_address(uint64_t *base, int set, int way)
                             (L1_NUM_SETS * LINE_SIZE * way)); // another overflow 
     }
 }
-// do a diff example problem 
+
 /* This function sets up a trojan/spy eviction set using the
  * function above.  The eviction set is essentially a linked
  * list that spans all ways of the conflicting cache set.
@@ -104,8 +102,7 @@ void setup(uint64_t *base, int assoc)
     }
 }
 
-/* TODO:
- *
+/* 
  * This function implements the trojan that sends a message
  * to the spy over the cache covert channel.  Note that the
  * message forgoes case sensitivity to maximize the covert
@@ -119,7 +116,7 @@ void setup(uint64_t *base, int assoc)
  * Note that you may need to serialize execution wherever
  * appropriate.
  */
-// CPUID
+
 void trojan(char byte)
 {
     int set;
@@ -138,11 +135,7 @@ void trojan(char byte)
         printf("pp trojan: unrecognized character %c\n", byte);
         exit(1);
     }
-    
-    /* TODO:
-     * Your attack code goes in here.
-     *
-     */  
+
     // evict a set 
     
     // base address, the start of the linked list.
@@ -157,8 +150,7 @@ void trojan(char byte)
     CPUID();
 }
 
-/* TODO:
- *
+/* 
  * This function implements the spy that receives a message
  * from the trojan over the cache covert channel.  Evictions
  * are timed using appropriate hardware timestamp counters
@@ -174,6 +166,7 @@ void trojan(char byte)
  * Note that you may need to serialize execution wherever
  * appropriate.
  */
+
 // CPUID? can have multiple 
 char spy()
 {
@@ -185,9 +178,7 @@ char spy()
     // Probe the cache line by line and take measurements
     CPUID(); // ?
     for (i = 0; i < L1_NUM_SETS; i++) {
-        /* TODO:
-         * Your attack code goes in here.
-         */
+      
         eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
         // use RDTSC() to time the cache accesses. We want to keep track of which set (aka which i value) took the longest time.
         RTDSC(start);
