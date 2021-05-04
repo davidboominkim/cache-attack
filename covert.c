@@ -49,10 +49,12 @@ __attribute__ ((aligned (64))) uint64_t spy_array[4096];
  * the returned eviction set address. Extract the index bits of the base address by first shifting right by the amount of offset bits. This will
  * get rid of the offset bits and make the index bits the least significant bits. Then, use this shifted value to perform an AND operation with the value
  * 0x3f (which is 0011 1111) in order to get rid of the tag bits and leave only the index bits. 
- * Now, we start constructing the eviction set address. The tag bits stay the same because _____ and are shifted left by the number of index bits in order to append
- * the index bits to the eviction set address. If the index bits' value is greater than the set ID, then the index bits will be equal to the number of sets
- * plus the set ID, because ____. In all other cases, the index bits will just be the set ID. Then, we shift left by the number of offset bits in order to append
- * the offset to the eviction set address. The value of this offset is always going to be the number of sets times the size of the line times the way ID. 
+ * 
+ * Now, we start constructing the eviction set address. The tag bits are shifted left by the number of index bits in order to append
+ * the index bits to the eviction set address. Sometimes, the index bits of the base address (which is always either the trojan array or spy array) could start in the
+ * middle of the cache, so if that is the case then we append the index bits as (L1_NUM_SETS + set) in order to utilize bit overflow to wrap around the cache. In all 
+ * other cases, the index bits will just be the set ID. Then, we shift left by the number of offset bits in order to append the number of sets times the size of the lines 
+ * times the way ID. This is another overflow, which is done to help direct and link eviction set addresses to other eviction set addresses.
  *
  */
 uint64_t* get_eviction_set_address(uint64_t *base, int set, int way)
@@ -62,10 +64,10 @@ uint64_t* get_eviction_set_address(uint64_t *base, int set, int way)
     uint64_t tag_bits = (((uint64_t)base) >> NUM_OFF_IND_BITS);
     int idx_bits = (((uint64_t)base) >> NUM_OFFSET_BITS) & 0x3f;
     
-    // sometimes index can be larger than set number because _________
+    // sometimes index can be larger than set number because the base address of the trojan or spy array can be in the middle of the cache. 
     // base address of either of the 2 arrays can start in the  middle of the actual cache, so it would wrap around
     if (idx_bits > set) {
-        // overflow (this is what changes the tag bits) **l1numsets overflows
+        // overflow (this is what changes the tag bits)
         return (uint64_t *)((((tag_bits << NUM_INDEX_BITS) +
                                (L1_NUM_SETS + set)) << NUM_OFFSET_BITS) +
                             (L1_NUM_SETS * LINE_SIZE * way)); // another overflow, to go from address 1 to address 2
@@ -142,11 +144,12 @@ void trojan(char byte)
      *
      */  
     // evict a set 
-    // base address
+    
+    // base address, the start of the linked list.
     eviction_set_addr = get_eviction_set_address(trojan_array, set, 0);
     
+    // traverse the linked list. This will fill up the cache with trojan addresses
     while (*eviction_set_addr != 0){
-     
         eviction_set_addr = *eviction_set_addr;
     }
     // every instruction after CPUID cannot be executed before all the instructions before CPUID are committed.
@@ -182,21 +185,22 @@ char spy()
     // Probe the cache line by line and take measurements
     CPUID(); // ?
     for (i = 0; i < L1_NUM_SETS; i++) {
-        eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
-        RTDSC(start);
         /* TODO:
          * Your attack code goes in here.
          */
-        // use RDTSC() somewhere to time the cache accesses. We want to keep track of which set (aka which i value) took the longest time.
-        
+        eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
+        // use RDTSC() to time the cache accesses. We want to keep track of which set (aka which i value) took the longest time.
+        RTDSC(start);
         
         // traverse the linked list
         while (*eviction_set_addr != 0){
-            
+            eviction_set_addr = *eviction_set_addr;
         }
         
-        RTDSC(end); // update time with the time taken ( ** use 1 call for start, 1 call for end **)
+        RTDSC(end);
+        // the time taken to traverse the linked list is end - start.
         time = end - start; 
+        // if this time is unusually long, we know that there was a cache miss. Therefore, this is the set that is being communicated by the trojan.
         if (time > longest){
             max_set = i;  
             longest = time;
@@ -204,8 +208,10 @@ char spy()
    
     }
     // CPUID somewhere around here
+    // increment the eviction_counts array with the set that is being communicated by the trojan.
     eviction_counts[max_set]++;
-    
+    CPUID();
+    // return value does not matter.
     return 'a';
 }
 
@@ -219,7 +225,8 @@ int main()
     int max_count, max_set;
 
     // TODO: CONFIGURE THIS -- currently, 32*assoc to force eviction out of L2
-    setup(trojan_array, ASSOCIATIVITY*32);
+//     setup(trojan_array, ASSOCIATIVITY*32);
+    setup(trojan_array, ASSOCIATIVITY);
 
     setup(spy_array, ASSOCIATIVITY);
     
@@ -228,7 +235,7 @@ int main()
         if (msg == EOF) {
             break;
         }
-        // do we do this for SAMPLES iterations because we want to make sure we dont consider conflict misses due to other reasons not related to the attack?
+        // we do this for SAMPLES iterations because we want to make sure we dont consider conflict misses due to other reasons not related to the attack
         for (k = 0; k < SAMPLES; k++) {
           trojan(msg);
           spy();
