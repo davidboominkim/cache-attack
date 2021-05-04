@@ -22,7 +22,7 @@
 // Intrinsic CLFLUSH for FLUSH+RELOAD attack
 #define CLFLUSH(address) _mm_clflush(address);
 
-#define SAMPLES 1000 // make this value as small as possible without changing the results 
+#define SAMPLES 500 // make this value as small as possible without changing the results 
 
 #define L1_CACHE_SIZE (32*1024)
 #define LINE_SIZE 64
@@ -121,7 +121,7 @@ void trojan(char byte)
 {
     int set;
     uint64_t *eviction_set_addr;
-    
+    CPUID();
     // turn the char into an uppercase char, since we don't care about case sensitivity and want to maximize bandwidth. 
     if (byte >= 'a' && byte <= 'z') {
         byte -= 32;
@@ -170,25 +170,29 @@ void trojan(char byte)
 // CPUID? can have multiple 
 char spy()
 {
+    CPUID();
     int i, max_set;
     uint64_t *eviction_set_addr;
     int longest = 0;
     
     int time, start, end;
     // Probe the cache line by line and take measurements
-    CPUID(); // ?
+    // CPUID(); // ?
     for (i = 0; i < L1_NUM_SETS; i++) {
       
         eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
         // use RDTSC() to time the cache accesses. We want to keep track of which set (aka which i value) took the longest time.
+        CPUID();
         RDTSC(start);
-        
+	//CPUID();
         // traverse the linked list
         while (*eviction_set_addr != 0){
             eviction_set_addr = *eviction_set_addr;
+	    // CPUID();
         }
-        
+        CPUID();
         RDTSC(end);
+	// CPUID();
         // the time taken to traverse the linked list is end - start.
         time = end - start; 
         // if this time is unusually long, we know that there was a cache miss. Therefore, this is the set that is being communicated by the trojan.
@@ -200,10 +204,13 @@ char spy()
     }
     // CPUID somewhere around here
     // increment the eviction_counts array with the set that is being communicated by the trojan.
+    // CPUID();
     eviction_counts[max_set]++;
     CPUID();
+    // CPUID();
     // return value does not matter.
-    return 'a';
+    // return 'a';
+    // CPUID();
 }
 
 int main()
@@ -217,7 +224,7 @@ int main()
 
     // TODO: CONFIGURE THIS -- currently, 32*assoc to force eviction out of L2
 //     setup(trojan_array, ASSOCIATIVITY*32);
-    setup(trojan_array, ASSOCIATIVITY);
+    setup(trojan_array, ASSOCIATIVITY*16);
 
     setup(spy_array, ASSOCIATIVITY);
     
