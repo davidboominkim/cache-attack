@@ -42,13 +42,9 @@ __attribute__ ((aligned (64))) uint64_t spy_array[4096];
  *
  * Describe the algorithm used here.
  *
- *
- *
- *
- *
- *
- *
- *
+ * Extract the tag bits of the eviction set address by simply right shifting the value of the base by the number of non-tag bits, aka the number of 
+ * index and offset bits, since that means that all that will be left over is the tag bits. These tag bits will be a part of 
+ * the returned eviction set address. Extract the index bits of the base address 
  *
  */
 uint64_t* get_eviction_set_address(uint64_t *base, int set, int way)
