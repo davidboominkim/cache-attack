@@ -57,7 +57,8 @@ uint64_t* get_eviction_set_address(uint64_t *base, int set, int way)
 {
     uint64_t tag_bits = (((uint64_t)base) >> NUM_OFF_IND_BITS);
     int idx_bits = (((uint64_t)base) >> NUM_OFFSET_BITS) & 0x3f;
-
+    
+    // sometimes index can be larger than set number because _________
     if (idx_bits > set) {
         return (uint64_t *)((((tag_bits << NUM_INDEX_BITS) +
                                (L1_NUM_SETS + set)) << NUM_OFFSET_BITS) +
@@ -110,6 +111,7 @@ void setup(uint64_t *base, int assoc)
  * Note that you may need to serialize execution wherever
  * appropriate.
  */
+// CPUID
 void trojan(char byte)
 {
     int set;
@@ -134,15 +136,19 @@ void trojan(char byte)
      * Your attack code goes in here.
      *
      */  
+    // evict a set 
+    // base address
     eviction_set_addr = get_eviction_set_address(trojan_array, set, 0);
+    
     while (*eviction_set_addr != 0){
+        
         
         // cause a cache miss????
         
         eviction_set_addr = *eviction_set_addr;
     }
-    
-
+    // every instruction after CPUID cannot be executed before all the instructions before CPUID are committed
+    CPUID();
 }
 
 /* TODO:
@@ -162,11 +168,14 @@ void trojan(char byte)
  * Note that you may need to serialize execution wherever
  * appropriate.
  */
+// CPUID
 char spy()
 {
     int i, max_set;
     uint64_t *eviction_set_addr;
     int longest = 0;
+    
+    int time;
     // Probe the cache line by line and take measurements
     for (i = 0; i < L1_NUM_SETS; i++) {
         /* TODO:
@@ -174,15 +183,16 @@ char spy()
          */
         // use RDTSC() somewhere?
         eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
-        int time = RDTSC();
+        RTDSC(time);
         if (time > longest){
             max_set = i;  
             longest = time;
         }
-        
-        
+   
     }
+    // CPUID somewhere around here
     eviction_counts[max_set]++;
+    return 'a';
 }
 
 int main()
@@ -221,6 +231,7 @@ int main()
         } else if (max_set == 63) {
             max_set = -22;
         }
+        // adds the char to the output
         fprintf(out, "%c", 32 + max_set);
         max_count = max_set = 0;
     }
