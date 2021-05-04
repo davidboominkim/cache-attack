@@ -181,14 +181,14 @@ char spy()
       
         eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
         // use RDTSC() to time the cache accesses. We want to keep track of which set (aka which i value) took the longest time.
-        RTDSC(start);
+        RDTSC(start);
         
         // traverse the linked list
         while (*eviction_set_addr != 0){
             eviction_set_addr = *eviction_set_addr;
         }
         
-        RTDSC(end);
+        RDTSC(end);
         // the time taken to traverse the linked list is end - start.
         time = end - start; 
         // if this time is unusually long, we know that there was a cache miss. Therefore, this is the set that is being communicated by the trojan.
