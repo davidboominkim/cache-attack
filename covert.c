@@ -11,6 +11,8 @@
 #include <x86intrin.h> /* for rdtscp and clflush */
 #endif
 
+// possible in 1 second 
+
 // Access hardware timestamp counter
 #define RDTSC(cycles) __asm__ volatile ("rdtsc" : "=a" (cycles));
 
@@ -20,12 +22,12 @@
 // Intrinsic CLFLUSH for FLUSH+RELOAD attack
 #define CLFLUSH(address) _mm_clflush(address);
 
-#define SAMPLES 10000 // TODO: CONFIGURE THIS
+#define SAMPLES 1000 // TODO: CONFIGURE THIS, make it as small as possible without changing the results 
 
 #define L1_CACHE_SIZE (32*1024)
 #define LINE_SIZE 64
 #define ASSOCIATIVITY 8
-#define L1_NUM_SETS (L1_CACHE_SIZE/(LINE_SIZE*ASSOCIATIVITY))
+#define L1_NUM_SETS (L1_CACHE_SIZE/(LINE_SIZE*ASSOCIATIVITY)) // 64
 #define NUM_OFFSET_BITS 6
 #define NUM_INDEX_BITS 6
 #define NUM_OFF_IND_BITS (NUM_OFFSET_BITS + NUM_INDEX_BITS)
@@ -55,20 +57,24 @@ __attribute__ ((aligned (64))) uint64_t spy_array[4096];
  */
 uint64_t* get_eviction_set_address(uint64_t *base, int set, int way)
 {
+    // base is either the spy array or trojan array
+    
     uint64_t tag_bits = (((uint64_t)base) >> NUM_OFF_IND_BITS);
     int idx_bits = (((uint64_t)base) >> NUM_OFFSET_BITS) & 0x3f;
     
     // sometimes index can be larger than set number because _________
+    // base address of either of the 2 arrays can start in the  middle of the actual cache, so it would wrap around
     if (idx_bits > set) {
+        // overflow (this is what changes the tag bits) **l1numsets overflows
         return (uint64_t *)((((tag_bits << NUM_INDEX_BITS) +
                                (L1_NUM_SETS + set)) << NUM_OFFSET_BITS) +
-                            (L1_NUM_SETS * LINE_SIZE * way));
+                            (L1_NUM_SETS * LINE_SIZE * way)); // another overflow, to go from address 1 to address 2
     } else {
         return (uint64_t *)((((tag_bits << NUM_INDEX_BITS) + set) << NUM_OFFSET_BITS) +
-                            (L1_NUM_SETS * LINE_SIZE * way));
+                            (L1_NUM_SETS * LINE_SIZE * way)); // another overflow 
     }
 }
-
+// do a diff example problem 
 /* This function sets up a trojan/spy eviction set using the
  * function above.  The eviction set is essentially a linked
  * list that spans all ways of the conflicting cache set.
@@ -125,7 +131,6 @@ void trojan(char byte)
     if (byte == 10 || byte == 13) { // encode a new line
         set = 63;
     } else if (byte >= 32 && byte < 96) {
-        // what happens if byte == 95? wouldn't set == 63 then, and it would be a newline? also why do we not include byte == 96?
         set = (byte - 32);
     } else {
         printf("pp trojan: unrecognized character %c\n", byte);
@@ -141,13 +146,11 @@ void trojan(char byte)
     eviction_set_addr = get_eviction_set_address(trojan_array, set, 0);
     
     while (*eviction_set_addr != 0){
-        
-        
-        // cause a cache miss????
-        
+     
         eviction_set_addr = *eviction_set_addr;
     }
-    // every instruction after CPUID cannot be executed before all the instructions before CPUID are committed
+    // every instruction after CPUID cannot be executed before all the instructions before CPUID are committed.
+    // this is done because our processor is OOO so we need to make sure spy does not start until after trojan is done.
     CPUID();
 }
 
@@ -168,22 +171,32 @@ void trojan(char byte)
  * Note that you may need to serialize execution wherever
  * appropriate.
  */
-// CPUID
+// CPUID? can have multiple 
 char spy()
 {
     int i, max_set;
     uint64_t *eviction_set_addr;
     int longest = 0;
     
-    int time;
+    int time, start, end;
     // Probe the cache line by line and take measurements
+    CPUID(); // ?
     for (i = 0; i < L1_NUM_SETS; i++) {
+        eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
+        RTDSC(start);
         /* TODO:
          * Your attack code goes in here.
          */
-        // use RDTSC() somewhere?
-        eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
-        RTDSC(time);
+        // use RDTSC() somewhere to time the cache accesses. We want to keep track of which set (aka which i value) took the longest time.
+        
+        
+        // traverse the linked list
+        while (*eviction_set_addr != 0){
+            
+        }
+        
+        RTDSC(end); // update time with the time taken ( ** use 1 call for start, 1 call for end **)
+        time = end - start; 
         if (time > longest){
             max_set = i;  
             longest = time;
@@ -192,6 +205,7 @@ char spy()
     }
     // CPUID somewhere around here
     eviction_counts[max_set]++;
+    
     return 'a';
 }
 
