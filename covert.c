@@ -22,7 +22,7 @@
 // Intrinsic CLFLUSH for FLUSH+RELOAD attack
 #define CLFLUSH(address) _mm_clflush(address);
 
-#define SAMPLES 500 // make this value as small as possible without changing the results 
+#define SAMPLES 100 // make this value as small as possible without changing the results 
 
 #define L1_CACHE_SIZE (32*1024)
 #define LINE_SIZE 64
@@ -121,7 +121,7 @@ void trojan(char byte)
 {
     int set;
     uint64_t *eviction_set_addr;
-    CPUID();
+    // CPUID();
     // turn the char into an uppercase char, since we don't care about case sensitivity and want to maximize bandwidth. 
     if (byte >= 'a' && byte <= 'z') {
         byte -= 32;
@@ -170,7 +170,7 @@ void trojan(char byte)
 // CPUID? can have multiple 
 char spy()
 {
-   CPUID(); // one letter
+  // CPUID(); // one letter
     int i, max_set;
     uint64_t *eviction_set_addr;
     int longest = 0;
@@ -209,7 +209,7 @@ char spy()
     // increment the eviction_counts array with the set that is being communicated by the trojan.
     // CPUID(); // one letter
     eviction_counts[max_set]++;
-    CPUID(); // one letter
+    // CPUID(); // one letter
     
     // return value does not matter
     
