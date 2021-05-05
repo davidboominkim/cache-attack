@@ -182,7 +182,7 @@ char spy()
       
         eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
         // use RDTSC() to time the cache accesses. We want to keep track of which set (aka which i value) took the longest time.
-        // CPUID(); // #, !, $, &
+        CPUID(); // #, !, $, &
         RDTSC(start);
 	// CPUID(); // )))))))
         // traverse the linked list
@@ -190,7 +190,7 @@ char spy()
             eviction_set_addr = *eviction_set_addr;
 	    // CPUID(); // super slow
         }
-        // CPUID(); // 99999 (((((
+        CPUID(); // 99999 (((((
         RDTSC(end);
 	// CPUID(); // a little bit better than the others, a, b, @, /, ., ?
         // the time taken to traverse the linked list is end - start.
@@ -207,7 +207,7 @@ char spy()
     }
     // CPUID somewhere around here
     // increment the eviction_counts array with the set that is being communicated by the trojan.
-    CPUID(); // one letter
+    // CPUID(); // one letter
     eviction_counts[max_set]++;
     CPUID(); // one letter
     
@@ -226,7 +226,7 @@ int main()
 
     // TODO: CONFIGURE THIS -- currently, 32*assoc to force eviction out of L2
 //     setup(trojan_array, ASSOCIATIVITY*32);
-    setup(trojan_array, ASSOCIATIVITY*16);
+    setup(trojan_array, ASSOCIATIVITY*8);
 
     setup(spy_array, ASSOCIATIVITY);
     
