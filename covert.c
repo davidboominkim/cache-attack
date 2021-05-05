@@ -22,7 +22,7 @@
 // Intrinsic CLFLUSH for FLUSH+RELOAD attack
 #define CLFLUSH(address) _mm_clflush(address);
 
-#define SAMPLES 100 // make this value as small as possible without changing the results 
+#define SAMPLES 500 // make this value as small as possible without changing the results 
 
 #define L1_CACHE_SIZE (32*1024)
 #define LINE_SIZE 64
@@ -137,7 +137,7 @@ void trojan(char byte)
     }
 
     // evict a set 
-    
+    // CPUID();
     // base address, the start of the linked list.
     eviction_set_addr = get_eviction_set_address(trojan_array, set, 0);
     
@@ -170,7 +170,7 @@ void trojan(char byte)
 // CPUID? can have multiple 
 char spy()
 {
-    CPUID();
+   CPUID(); // one letter
     int i, max_set;
     uint64_t *eviction_set_addr;
     int longest = 0;
@@ -182,35 +182,37 @@ char spy()
       
         eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
         // use RDTSC() to time the cache accesses. We want to keep track of which set (aka which i value) took the longest time.
-        CPUID();
+        // CPUID(); // #, !, $, &
         RDTSC(start);
-	//CPUID();
+	// CPUID(); // )))))))
         // traverse the linked list
         while (*eviction_set_addr != 0){
             eviction_set_addr = *eviction_set_addr;
-	    // CPUID();
+	    // CPUID(); // super slow
         }
-        CPUID();
+        // CPUID(); // 99999 (((((
         RDTSC(end);
-	// CPUID();
+	// CPUID(); // a little bit better than the others, a, b, @, /, ., ?
         // the time taken to traverse the linked list is end - start.
         time = end - start; 
         // if this time is unusually long, we know that there was a cache miss. Therefore, this is the set that is being communicated by the trojan.
         if (time > longest){
+	  // CPUID(); no
             max_set = i;  
             longest = time;
+	    // CPUID(); // ((((
         }
+	// CPUID(); $ ! # " 
    
     }
     // CPUID somewhere around here
     // increment the eviction_counts array with the set that is being communicated by the trojan.
-    // CPUID();
+    CPUID(); // one letter
     eviction_counts[max_set]++;
-    CPUID();
-    // CPUID();
-    // return value does not matter.
-    // return 'a';
-    // CPUID();
+    CPUID(); // one letter
+    
+    // return value does not matter
+    
 }
 
 int main()
@@ -224,7 +226,7 @@ int main()
 
     // TODO: CONFIGURE THIS -- currently, 32*assoc to force eviction out of L2
 //     setup(trojan_array, ASSOCIATIVITY*32);
-    setup(trojan_array, ASSOCIATIVITY*32);
+    setup(trojan_array, ASSOCIATIVITY*16);
 
     setup(spy_array, ASSOCIATIVITY);
     
@@ -243,6 +245,7 @@ int main()
                 max_count = eviction_counts[j];
                 max_set = j;
             }
+	    // CPUID(); // (((
             eviction_counts[j] = 0;
         }
         if (max_set >= 33 && max_set <= 59) {
