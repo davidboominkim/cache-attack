@@ -22,7 +22,7 @@
 // Intrinsic CLFLUSH for FLUSH+RELOAD attack
 #define CLFLUSH(address) _mm_clflush(address);
 
-#define SAMPLES 50 // make this value as small as possible without changing the results, 100 works
+#define SAMPLES 50 // make this value as small as possible without changing the results
 
 #define L1_CACHE_SIZE (32*1024)
 #define LINE_SIZE 64
@@ -108,20 +108,16 @@ void setup(uint64_t *base, int assoc)
  * message forgoes case sensitivity to maximize the covert
  * channel bandwidth.
  *
- * Your job is to use the right eviction set to mount an
- * appropriate PRIME+PROBE or FLUSH+RELOAD covert channel
- * attack.  Remember that in both these attacks, we only need
- * to time the spy and not the trojan.
- *
- * Note that you may need to serialize execution wherever
- * appropriate.
+ * We must use the right eviction set to mount the
+ * appropriate PRIME+PROBE covert channel
+ * attack.  
+ * 
  */
 
 void trojan(char byte)
 {
     int set;
     uint64_t *eviction_set_addr;
-    // CPUID();
     // turn the char into an uppercase char, since we don't care about case sensitivity and want to maximize bandwidth. 
     if (byte >= 'a' && byte <= 'z') {
         byte -= 32;
@@ -136,8 +132,6 @@ void trojan(char byte)
         exit(1);
     }
 
-    // evict a set 
-    // CPUID();
     // base address, the start of the linked list.
     eviction_set_addr = get_eviction_set_address(trojan_array, set, 0);
     
@@ -158,58 +152,40 @@ void trojan(char byte)
  * only record evictions to the set that incurred the maximum
  * penalty in terms of its access time.
  *
- * Your job is to use the right eviction set to mount an
- * appropriate PRIME+PROBE or FLUSH+RELOAD covert channel
- * attack.  Remember that in both these attacks, we only need
- * to time the spy and not the trojan.
- *
- * Note that you may need to serialize execution wherever
- * appropriate.
+ * We use the eviction set to mount an
+ * appropriate PRIME+PROBE covert channel
+ * attack. 
  */
 
-// CPUID? can have multiple 
 char spy()
 {
-  // CPUID(); // one letter
     int i, max_set;
     uint64_t *eviction_set_addr;
     int longest = 0;
     
     int time, start, end;
     // Probe the cache line by line and take measurements
-    // CPUID(); // ?
     for (i = 0; i < L1_NUM_SETS; i++) {
       
         eviction_set_addr = get_eviction_set_address(spy_array, i, 0);
         // use RDTSC() to time the cache accesses. We want to keep track of which set (aka which i value) took the longest time.
-        CPUID(); // #, !, $, &
+        CPUID(); 
         RDTSC(start);
-	// CPUID(); // )))))))
         // traverse the linked list
         while (*eviction_set_addr != 0){
             eviction_set_addr = *eviction_set_addr;
-	    // CPUID(); // super slow
         }
-        CPUID(); // 99999 (((((
+        CPUID(); 
         RDTSC(end);
-	// CPUID(); // a little bit better than the others, a, b, @, /, ., ?
         // the time taken to traverse the linked list is end - start.
         time = end - start; 
         // if this time is unusually long, we know that there was a cache miss. Therefore, this is the set that is being communicated by the trojan.
         if (time > longest){
-	  // CPUID(); no
             max_set = i;  
             longest = time;
-	    // CPUID(); // ((((
         }
-	// CPUID(); $ ! # " 
-   
     }
-    // CPUID somewhere around here
-    // increment the eviction_counts array with the set that is being communicated by the trojan.
-    // CPUID(); // one letter
     eviction_counts[max_set]++;
-    // CPUID(); // one letter
     
     // return value does not matter
     
@@ -223,9 +199,7 @@ int main()
 
     int j, k;
     int max_count, max_set;
-
-    // TODO: CONFIGURE THIS -- currently, 32*assoc to force eviction out of L2
-//     setup(trojan_array, ASSOCIATIVITY*32);
+	
     setup(trojan_array, ASSOCIATIVITY*32);
 
     setup(spy_array, ASSOCIATIVITY);
@@ -245,7 +219,6 @@ int main()
                 max_count = eviction_counts[j];
                 max_set = j;
             }
-	    // CPUID(); // (((
             eviction_counts[j] = 0;
         }
         if (max_set >= 33 && max_set <= 59) {
